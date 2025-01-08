@@ -61,7 +61,18 @@ export default function LoginPage() {
           console.error('Error en redirección:', error);
           window.location.href = '/admin/dashboard';
         }
-      } else {
+      } else if (userData.role === 'hotel_admin') {
+        setDebugInfo('Redirigiendo a dashboard de admin...');
+        console.log('Intentando redireccionar a /dashboard');
+        
+        // Intenta ambas formas de redirección
+        try {
+          window.location.replace('/dashboard');
+        } catch (error) {
+          console.error('Error en redirección:', error);
+          window.location.href = '/dashboard';
+
+      }} else {
         throw new Error('No tienes permisos de administrador');
       }
 

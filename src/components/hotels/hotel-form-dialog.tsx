@@ -41,13 +41,22 @@ export default function HotelFormDialog({
         });
       } else {
         // Crear nuevo hotel
-        const hotelRef = doc(collection(db, 'hotels'));
+        const hotelRef = doc(collection(db, 'hotels', hotelData.id));
         await setDoc(hotelRef, {
           ...formData,
           status: 'trial',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           trialEndsAt: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 días
+        });
+        const userRef = doc(db, 'users', hotelData.id);
+        await setDoc(userRef, {
+          email: hotelData.email,
+          name: hotelData.ownerName,
+          role: 'hotel_admin',
+          hotelId: hotelData.id,
+          createdAt: serverTimestamp(),
+          status: 'active'
         });
       }
 

@@ -11,6 +11,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { db } from '@/lib/firebase/config';
 import { doc, setDoc, updateDoc, serverTimestamp, collection, getDocs, query } from 'firebase/firestore';
 
+const ROOM_TYPES = [
+  { value: 'single', label: 'Individual' },
+  { value: 'double', label: 'Doble' },
+  { value: 'suite', label: 'Suite' },
+  { value: 'presidential', label: 'Presidencial' }
+];
+
 export default function RoomFormDialog({
   isOpen,
   onClose,
@@ -29,7 +36,6 @@ export default function RoomFormDialog({
     type: roomToEdit?.type || 'single',
     floor: roomToEdit?.floor || '',
     features: roomToEdit?.features?.join(', ') || '',
-    basePrice: roomToEdit?.basePrice || ''
   });
 
   const handleSubmit = async (e) => {
@@ -58,7 +64,6 @@ export default function RoomFormDialog({
       type: formData.type,
       floor: parseInt(formData.floor),
       features: formData.features.split(',').map(f => f.trim()).filter(Boolean),
-      basePrice: parseFloat(formData.basePrice),
       status: 'available',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -93,7 +98,6 @@ export default function RoomFormDialog({
           type: formData.type,
           floor: parseInt(formData.floor),
           features: formData.features.split(',').map(f => f.trim()).filter(Boolean),
-          basePrice: parseFloat(formData.basePrice),
           status: 'available',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -180,7 +184,6 @@ export default function RoomFormDialog({
               </div>
             </TabsContent>
 
-            {/* Campos comunes */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="floor">Piso</Label>
@@ -201,10 +204,11 @@ export default function RoomFormDialog({
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   required
                 >
-                  <option value="single">Individual</option>
-                  <option value="double">Doble</option>
-                  <option value="suite">Suite</option>
-                  <option value="presidential">Presidencial</option>
+                  {ROOM_TYPES.map(type => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -219,20 +223,7 @@ export default function RoomFormDialog({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="basePrice">Precio Base</Label>
-              <Input
-                id="basePrice"
-                type="number"
-                value={formData.basePrice}
-                onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
-                required
-                min="0"
-                step="0.01"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-4">
+            <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>

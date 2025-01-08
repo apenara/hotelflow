@@ -1,9 +1,14 @@
-"use client"; 
-import React, { useState, useMemo } from 'react';
+'use client';
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '@/lib/auth';
+import { db } from '@/lib/firebase/config';
+import { collection, getDocs } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   BedDouble, 
   Loader2, 
@@ -14,79 +19,98 @@ import {
   Moon,
   Search,
   Building,
-  User,
-  Calendar,
-  Edit
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { RoomStatusMenu } from '@/components/hotels/RoomStatusMenu';
+
+// Constantes para estados de habitaciones
+const ROOM_STATES = {
+  disponible: {
+    color: 'bg-green-500',
+    icon: <Check className="h-6 w-6" />,
+  },
+  ocupada: {
+    color: 'bg-red-500',
+    icon: <BedDouble className="h-6 w-6" />,
+  },
+  mantenimiento: {
+    color: 'bg-yellow-500',
+    icon: <AlertTriangle className="h-6 w-6" />,
+  },
+  limpieza: {
+    color: 'bg-blue-500',
+    icon: <Paintbrush className="h-6 w-6" />,
+  },
+  'no-molestar': {
+    color: 'bg-purple-500',
+    icon: <Moon className="h-6 w-6" />,
+  },
+  checkout: {
+    color: 'bg-orange-500',
+    icon: <Clock className="h-6 w-6" />,
+  },
+};
 
 const HotelDashboard = () => {
+  const { user } = useAuth();
   const [pisoSeleccionado, setPisoSeleccionado] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
-  // Estados de ejemplo para las habitaciones
-  const [habitaciones] = useState([
-    // Piso 1
-    { numero: '101', estado: 'ocupada', tipo: 'doble', piso: 1, limpieza: true },
-    { numero: '102', estado: 'disponible', tipo: 'doble', piso: 1, limpieza: true },
-    { numero: '103', estado: 'mantenimiento', tipo: 'simple', piso: 1, limpieza: false },
-    { numero: '104', estado: 'limpieza', tipo: 'doble', piso: 1, limpieza: false },
-    { numero: '105', estado: 'no-molestar', tipo: 'suite', piso: 1, limpieza: true },
-    { numero: '106', estado: 'checkout', tipo: 'doble', piso: 1, limpieza: false },
-    { numero: '107', estado: 'ocupada', tipo: 'simple', piso: 1, limpieza: true },
-    { numero: '108', estado: 'disponible', tipo: 'suite', piso: 1, limpieza: true },
-    // Piso 2
-    { numero: '201', estado: 'ocupada', tipo: 'doble', piso: 2, limpieza: true },
-    { numero: '202', estado: 'disponible', tipo: 'simple', piso: 2, limpieza: true },
-    { numero: '203', estado: 'mantenimiento', tipo: 'suite', piso: 2, limpieza: false },
-    { numero: '204', estado: 'limpieza', tipo: 'doble', piso: 2, limpieza: false },
-    { numero: '205', estado: 'no-molestar', tipo: 'doble', piso: 2, limpieza: true },
-    { numero: '206', estado: 'checkout', tipo: 'simple', piso: 2, limpieza: false },
-    { numero: '207', estado: 'ocupada', tipo: 'suite', piso: 2, limpieza: true },
-    { numero: '208', estado: 'disponible', tipo: 'doble', piso: 2, limpieza: true },
-    // Piso 3
-    { numero: '301', estado: 'ocupada', tipo: 'suite', piso: 3, limpieza: false },
-    { numero: '302', estado: 'disponible', tipo: 'doble', piso: 3, limpieza: true },
-    { numero: '303', estado: 'checkout', tipo: 'simple', piso: 3, limpieza: false },
-    { numero: '304', estado: 'ocupada', tipo: 'doble', piso: 3, limpieza: true },
-    { numero: '305', estado: 'limpieza', tipo: 'suite', piso: 3, limpieza: false },
-    { numero: '306', estado: 'no-molestar', tipo: 'doble', piso: 3, limpieza: true },
-    { numero: '307', estado: 'disponible', tipo: 'simple', piso: 3, limpieza: true },
-    { numero: '308', estado: 'mantenimiento', tipo: 'suite', piso: 3, limpieza: false },
-  ]);
+  const [habitaciones, setHabitaciones] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const mapearEstado = (status) => {
+    const mapeoEstados = {
+      'available': 'disponible',
+      'occupied': 'ocupada',
+      'cleaning': 'limpieza',
+      'maintenance': 'mantenimiento',
+      'do_not_disturb': 'no-molestar',
+      'check_out': 'checkout'
+    };
+    return mapeoEstados[status] || 'disponible';
+  };
+
+  const fetchHabitaciones = async () => {
+    try {
+      setIsLoading(true);
+      if (!user?.hotelId) {
+        throw new Error('No se encontró el ID del hotel');
+      }
+
+      const habitacionesRef = collection(db, 'hotels', user.hotelId, 'rooms');
+      const habitacionesSnapshot = await getDocs(habitacionesRef);
+      
+      const habitacionesData = habitacionesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        numero: doc.data().number || '',
+        estado: mapearEstado(doc.data().status),
+        tipo: doc.data().type || 'simple',
+        piso: parseInt(doc.data().floor) || 1,
+        limpieza: doc.data().lastCleaning ? true : false,
+      }));
+
+      setHabitaciones(habitacionesData);
+      setError(null);
+    } catch (error) {
+      console.error('Error al cargar habitaciones:', error);
+      setError('Error al cargar las habitaciones');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user && user.hotelId) {
+      fetchHabitaciones();
+    }
+  }, [user]);
 
   const getEstadoColor = (estado) => {
-    const colores = {
-      'ocupada': 'bg-red-500',
-      'disponible': 'bg-green-500',
-      'mantenimiento': 'bg-yellow-500',
-      'limpieza': 'bg-blue-500',
-      'no-molestar': 'bg-purple-500',
-      'checkout': 'bg-orange-500'
-    };
-    return colores[estado];
+    return ROOM_STATES[estado]?.color || 'bg-gray-500';
   };
 
   const getEstadoIcono = (estado) => {
-    const iconos = {
-      'ocupada': <BedDouble className="h-6 w-6" />,
-      'disponible': <Check className="h-6 w-6" />,
-      'mantenimiento': <AlertTriangle className="h-6 w-6" />,
-      'limpieza': <Paintbrush className="h-6 w-6" />,
-      'no-molestar': <Moon className="h-6 w-6" />,
-      'checkout': <Clock className="h-6 w-6" />
-    };
-    return iconos[estado];
+    return ROOM_STATES[estado]?.icon || <AlertTriangle className="h-6 w-6" />;
   };
 
   // Obtener habitaciones filtradas
@@ -110,6 +134,24 @@ const HotelDashboard = () => {
   const pisosUnicos = useMemo(() => {
     return [...new Set(habitaciones.map(h => h.piso))].sort((a, b) => a - b);
   }, [habitaciones]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4">
@@ -150,7 +192,7 @@ const HotelDashboard = () => {
 
           {/* Contadores de estado */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-            {['ocupada', 'disponible', 'mantenimiento', 'limpieza', 'no-molestar', 'checkout'].map((estado) => (
+            {Object.keys(ROOM_STATES).map((estado) => (
               <Card key={estado} className={`${getEstadoColor(estado)} text-white p-2`}>
                 <div className="text-center">
                   <div className="font-bold">{estado.charAt(0).toUpperCase() + estado.slice(1)}</div>
@@ -162,26 +204,29 @@ const HotelDashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-4">
-            {habitaciones.map((habitacion) => (
-                              <Card key={habitacion.numero} className="relative hover:shadow-lg transition-shadow">
-                <CardContent className="p-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-base font-bold">{habitacion.numero}</span>
-                    {getEstadoIcono(habitacion.estado)}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Badge className={`${getEstadoColor(habitacion.estado)} text-white text-xs w-full justify-center`}>
-                      {habitacion.estado}
+            {habitacionesFiltradas.map((habitacion) => (
+              <Card key={habitacion.id} className="relative hover:shadow-lg transition-shadow">
+              <CardContent className="p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-base font-bold">{habitacion.numero}</span>
+                  {getEstadoIcono(habitacion.estado)}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <RoomStatusMenu 
+                    habitacionId={habitacion.id}
+                    hotelId={user.hotelId}
+                    estadoActual={habitacion.status}
+                    onStatusChange={fetchHabitaciones}
+                  />
+                  <div className="flex justify-between items-center text-xs text-gray-600">
+                    <span>{habitacion.tipo}</span>
+                    <Badge className={`${habitacion.limpieza ? "bg-green-500" : "bg-red-500"} text-xs`}>
+                      {habitacion.limpieza ? "L" : "PL"}
                     </Badge>
-                    <div className="flex justify-between items-center text-xs text-gray-600">
-                      <span>{habitacion.tipo}</span>
-                      <Badge className={`${habitacion.limpieza ? "bg-green-500" : "bg-red-500"} text-xs`}>
-                        {habitacion.limpieza ? "L" : "PL"}
-                      </Badge>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             ))}
           </div>
         </CardContent>

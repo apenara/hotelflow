@@ -1,33 +1,33 @@
+// src/app/(admin)/hotels/[hotelId]/rooms/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase/config';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { Search, Plus } from 'lucide-react';
 import RoomFormDialog from '@/components/hotels/room-form-dialog';
 
-export default function RoomsPage({ params }) {
-  const hotelId = params.hotelId;
+export default function RoomsPage() {
+  const params = useParams();
+  const hotelId = params.hotelId as string;
+
   const [rooms, setRooms] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  useEffect(() => {
-    fetchRooms();
-  }, [hotelId]);
 
   const fetchRooms = async () => {
     try {
       const roomsRef = collection(db, 'hotels', hotelId, 'rooms');
-      const q = query(roomsRef, orderBy('number'));
+      const q = query(roomsRef, orderBy('number', 'asc'));
       const snapshot = await getDocs(q);
       const roomsData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -36,10 +36,29 @@ export default function RoomsPage({ params }) {
       setRooms(roomsData);
     } catch (error) {
       console.error('Error fetching rooms:', error);
+      setError('Error al cargar las habitaciones');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleDeleteRoom = async (roomId) => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar esta habitación?')) {
+      try {
+        await deleteDoc(doc(db, 'hotels', hotelId, 'rooms', roomId));
+        await fetchRooms(); // Recargar la lista
+      } catch (error) {
+        console.error('Error al eliminar la habitación:', error);
+        setError('Error al eliminar la habitación');
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (hotelId) {
+      fetchRooms();
+    }
+  }, [hotelId]);
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -48,29 +67,26 @@ export default function RoomsPage({ params }) {
       maintenance: 'bg-yellow-100 text-yellow-800',
       cleaning: 'bg-blue-100 text-blue-800'
     };
-    const labels = {
-      available: 'Disponible',
-      occupied: 'Ocupada',
-      maintenance: 'Mantenimiento',
-      cleaning: 'Limpieza'
-    };
-    return <Badge className={styles[status]}>{labels[status]}</Badge>;
+    return <Badge className={styles[status] || 'bg-gray-100 text-gray-800'}>{status}</Badge>;
   };
 
-  const filteredRooms = rooms.filter(room => {
-    const matchesSearch = room.number.toString().includes(searchTerm);
-    const matchesFilter = statusFilter === 'all' || room.status === statusFilter;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredRooms = rooms.filter(room =>
+    room.number.toString().toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (isLoading) return <div>Cargando...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Habitaciones</h1>
-        <Button onClick={() => {
-          setSelectedRoom(null);
-          setShowForm(true);
-        }}>
+        <Button
+          onClick={() => {
+            setSelectedRoom(null);
+            setShowForm(true);
+          }}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Nueva Habitación
         </Button>
@@ -91,17 +107,6 @@ export default function RoomsPage({ params }) {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <select
-              className="border rounded-md px-3 py-2"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">Todos los estados</option>
-              <option value="available">Disponibles</option>
-              <option value="occupied">Ocupadas</option>
-              <option value="maintenance">Mantenimiento</option>
-              <option value="cleaning">Limpieza</option>
-            </select>
           </div>
 
           <div className="border rounded-md">
@@ -111,8 +116,8 @@ export default function RoomsPage({ params }) {
                   <TableHead>Número</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Última Limpieza</TableHead>
-                  <TableHead>Acciones</TableHead>
+                  <TableHead>Piso</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -121,10 +126,8 @@ export default function RoomsPage({ params }) {
                     <TableCell className="font-medium">{room.number}</TableCell>
                     <TableCell>{room.type}</TableCell>
                     <TableCell>{getStatusBadge(room.status)}</TableCell>
-                    <TableCell>
-                      {room.lastCleaning?.toDate().toLocaleDateString() || 'N/A'}
-                    </TableCell>
-                    <TableCell className="space-x-2">
+                    <TableCell>{room.floor}</TableCell>
+                    <TableCell className="text-right">
                       <Button
                         variant="outline"
                         size="sm"
@@ -136,11 +139,11 @@ export default function RoomsPage({ params }) {
                         Editar
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="destructive"
                         size="sm"
-                        onClick={() => updateRoomStatus(room.id, 'cleaning')}
+                        onClick={() => handleDeleteRoom(room.id)}
                       >
-                        Marcar Limpieza
+                        Eliminar
                       </Button>
                     </TableCell>
                   </TableRow>
