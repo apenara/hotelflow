@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { updateDoc, doc } from 'firebase/firestore';
+import { updateDoc, doc, addDoc, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 
 const estados = [
@@ -26,40 +26,52 @@ interface RoomStatusMenuProps {
   hotelId: string;
   estadoActual: string;
   onStatusChange: () => void;
+  currentUser: any;
 }
 
-export function RoomStatusMenu({ habitacionId, hotelId, estadoActual, onStatusChange }: RoomStatusMenuProps) {
-    const handleStatusChange = async (newStatus: string) => {
-        try {
-          const habitacionRef = doc(db, 'hotels', hotelId, 'rooms', habitacionId);
-          const timestamp = new Date();
-      
-          // Actualizar estado de la habitación
-          await updateDoc(habitacionRef, {
-            status: newStatus,
-            lastStatusChange: timestamp,
-            ...(newStatus === 'cleaning' && { lastCleaning: timestamp })
-          });
-      
-          // Registrar en el historial
-          const historyRef = collection(db, 'hotels', hotelId, 'rooms', habitacionId, 'history');
-          await addDoc(historyRef, {
-            previousStatus: estadoActual,
-            newStatus,
-            timestamp,
-            userName: user.name, // Asegúrate de pasar el usuario como prop
-            userId: user.uid,
-            notes: '' // Podrías agregar un campo para notas opcional
-          });
-      
-          onStatusChange();
-        } catch (error) {
-          console.error('Error al cambiar estado:', error);
-          alert('Error al cambiar el estado de la habitación');
-        }
-      };
+export function RoomStatusMenu({ 
+  habitacionId, 
+  hotelId, 
+  estadoActual, 
+  onStatusChange,
+  currentUser 
+}: RoomStatusMenuProps) {
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const habitacionRef = doc(db, 'hotels', hotelId, 'rooms', habitacionId);
+      const timestamp = new Date();
 
-  const currentStatus = estados.find(e => e.id === estadoActual) || estados[0];
+      // Asegurar que tenemos un estado actual válido
+      const currentStatus = estadoActual || 'available';
+
+      // Actualizar estado de la habitación
+      await updateDoc(habitacionRef, {
+        status: newStatus,
+        lastStatusChange: timestamp,
+        ...(newStatus === 'cleaning' && { lastCleaning: timestamp })
+      });
+
+      // Registrar en el historial
+      const historyRef = collection(db, 'hotels', hotelId, 'rooms', habitacionId, 'history');
+      await addDoc(historyRef, {
+        previousStatus: currentStatus,
+        newStatus,
+        timestamp,
+        userName: currentUser.name || 'Usuario',
+        userId: currentUser.uid,
+        notes: ''
+      });
+
+      onStatusChange();
+    } catch (error) {
+      console.error('Error al cambiar estado:', error);
+      alert('Error al cambiar el estado de la habitación');
+    }
+  };
+
+  // Asegurar que tenemos un estado actual válido
+  const safeEstadoActual = estadoActual || 'available';
+  const currentStatus = estados.find(e => e.id === safeEstadoActual) || estados[0];
 
   return (
     <DropdownMenu>
@@ -68,6 +80,7 @@ export function RoomStatusMenu({ habitacionId, hotelId, estadoActual, onStatusCh
           variant="outline" 
           size="sm"
           className="w-full justify-start"
+          onClick={(e) => e.stopPropagation()} // Evitar que se abra el detalle al hacer clic en el menú
         >
           <div className={`mr-2 ${currentStatus.color}`}>
             {currentStatus.icon}
@@ -79,7 +92,10 @@ export function RoomStatusMenu({ habitacionId, hotelId, estadoActual, onStatusCh
         {estados.map((estado) => (
           <DropdownMenuItem
             key={estado.id}
-            onClick={() => handleStatusChange(estado.id)}
+            onClick={(e) => {
+              e.stopPropagation(); // Evitar que se abra el detalle al seleccionar un estado
+              handleStatusChange(estado.id);
+            }}
             className="cursor-pointer"
           >
             <div className={`mr-2 ${estado.color}`}>
