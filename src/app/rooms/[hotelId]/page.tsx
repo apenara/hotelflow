@@ -1,6 +1,7 @@
 // src/app/rooms/[hotelId]/[roomId]/page.tsx
 'use client';
 
+import { use } from 'react';
 import { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
@@ -11,8 +12,12 @@ import { BedDouble, Moon, Paintbrush, Waves, MessageSquare } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-export default function PublicRoomPage({ params }) {
-  const { hotelId, roomId } = params;
+export default function PublicRoomPage({  params: rawParams }) {
+  const params = use(Promise.resolve(rawParams));
+  const hotelId = params.hotelId;
+  const roomId = params.roomId;
+
+
   const [room, setRoom] = useState(null);
   const [hotel, setHotel] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +29,15 @@ export default function PublicRoomPage({ params }) {
   useEffect(() => {
     const fetchRoomData = async () => {
       try {
+        
+        // Obtener datos del hotel
+        
+        const hotelDoc = await getDoc(doc(db, 'hotels', hotelId));
+        if (!hotelDoc.exists()) {
+          throw new Error('Hotel no encontrado');
+        }
+        setHotel({ id: hotelDoc.id, ...hotelDoc.data() });
+        
         // Obtener datos de la habitación
         const roomDoc = await getDoc(doc(db, 'hotels', hotelId, 'rooms', roomId));
         if (!roomDoc.exists()) {
@@ -31,12 +45,6 @@ export default function PublicRoomPage({ params }) {
         }
         setRoom({ id: roomDoc.id, ...roomDoc.data() });
 
-        // Obtener datos del hotel
-        const hotelDoc = await getDoc(doc(db, 'hotels', hotelId));
-        if (!hotelDoc.exists()) {
-          throw new Error('Hotel no encontrado');
-        }
-        setHotel({ id: hotelDoc.id, ...hotelDoc.data() });
 
       } catch (error) {
         console.error('Error:', error);

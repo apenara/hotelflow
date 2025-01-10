@@ -21,6 +21,7 @@ import {
   Building,
 } from 'lucide-react';
 import { RoomCard } from '@/components/hotels/RoomCard';
+import { RequestNotifications } from '@/components/dashboard/RequestNotifications';
 
 
 const ESTADOS = {
