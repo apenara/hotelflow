@@ -87,7 +87,7 @@ export default function StaffRoomView() {
   }, [params]);
 
   const handleStateChange = async (newState) => {
-    if (!user || !notes.trim()) {
+    if (!user || !notes.trim()) { 
       setError('Por favor, añade una nota sobre el cambio de estado');
       return;
     }

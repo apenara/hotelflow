@@ -14,6 +14,7 @@ export type RoomType = 'single' | 'double' | 'suite' | 'presidential';
 export type MaintenanceType = 'preventive' | 'corrective';
 export type MaintenanceStatus = 'pending' | 'in_progress' | 'completed';
 export type MaintenancePriority = 'low' | 'medium' | 'high';
+export type MaintenanceCategory = 'room' | 'common_area' | 'equipment' | 'facility';
 
 // Interfaces principales
 export interface Hotel {
@@ -73,16 +74,35 @@ export interface User {
   status: UserStatus;
 }
 
+// Actualizamos la interfaz de Maintenance con los nuevos campos
 export interface Maintenance {
   id: string;
   roomId: string;
+  staffId: string;
   type: MaintenanceType;
+  category: MaintenanceCategory;
   description: string;
+  location: string;
   status: MaintenanceStatus;
   priority: MaintenancePriority;
-  assignedTo: string;
   createdAt: Timestamp;
-  scheduledFor: Timestamp;
+  startedAt?: Timestamp;
   completedAt?: Timestamp;
+  scheduledFor: Timestamp;
+  timeSpent?: number; // en minutos
   notes?: string;
+  images?: string[];
+  rating?: number; // 1-5
+  feedback?: string;
+}
+
+// Nueva interfaz para métricas de desempeño
+export interface StaffPerformanceMetrics {
+  totalTasks: number;
+  completedTasks: number;
+  averageTimePerTask: number; // en minutos
+  averageRating: number;
+  responseTime: number; // en minutos
+  tasksThisMonth: number;
+  completionRate: number; // porcentaje
 }

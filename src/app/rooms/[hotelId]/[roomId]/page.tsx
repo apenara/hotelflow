@@ -16,6 +16,8 @@ import { useAuth } from '@/lib/auth';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { Label } from '@/components/ui/label';
+import { PinLogin } from '@/components/PinLogin';
+
 
 export default function PublicRoomView() {
   const params = useParams();
@@ -27,11 +29,25 @@ export default function PublicRoomView() {
   const [message, setMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const { user } = useAuth();
+  const [showPinLogin, setShowPinLogin] = useState(false)
   const [showStaffLogin, setShowStaffLogin] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+
+  const handleStaffAccess = (staffMember) => {
+    // Guardar la información del staff en localStorage o context
+    localStorage.setItem('staffAccess', JSON.stringify({
+      id: staffMember.id,
+      name: staffMember.name,
+      role: staffMember.role,
+      timestamp: new Date().toISOString()
+    }));
+    
+    // Redirigir a la vista de staff
+    window.location.href = `/rooms/${params.hotelId}/${params.roomId}/staff`;
+  };
   const handleStaffLogin = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
@@ -269,15 +285,38 @@ export default function PublicRoomView() {
           </div>
                     {/* Separador */}
                     <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">
-                Acceso del Personal
-              </span>
-            </div>
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
           </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-muted-foreground">
+              Acceso del Personal
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Button 
+            variant="outline"
+            onClick={() => setShowPinLogin(true)}
+          >
+            Acceso con PIN
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => setShowStaffLogin(true)}
+          >
+            Acceso con Email
+          </Button>
+        </div>
+        <PinLogin 
+          isOpen={showPinLogin}
+          onClose={() => setShowPinLogin(false)}
+          onSuccess={handleStaffAccess}
+          hotelId={params.hotelId}
+        />
+        <StaffLoginDialog />
+      
 
           {/* Botón de acceso para staff */}
           {user ? (
@@ -299,7 +338,7 @@ export default function PublicRoomView() {
               variant="outline"
               onClick={() => setShowStaffLogin(true)}
             >
-              Acceso del Personal
+              Acceso Personal
             </Button>
           )}
           <StaffLoginDialog />
